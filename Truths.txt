@@ -1,0 +1,18 @@
+Initial list of potential truths to be assumed throughout project:
+
+Base units: metric (allows us to avoid the slugs vs. pounds mass fuster cluck involved with English units).
+
+Pure state space:
+S = {x, y, x', y'} (2-D position, 2-D velocity) where primed variable is 1st derivative
+	for x in {-2,-1,0,1,2} (left shoulder, left lane, straddling, right lane, right shoulder)
+
+Working state space:
+S' = {d_front, d_right, d_back, d_left, d'_front, d'_right, d'_back, d'_left, eta}
+	d represents delta
+	eta captures speed (function of current speed, preferred speed, and speed limit)
+
+A = {accelerate, lane change}
+	Permissible acceleration values = {TBD}
+	Permissible lane change values = {TBD}
+
+Reward function, R(state) = TBD

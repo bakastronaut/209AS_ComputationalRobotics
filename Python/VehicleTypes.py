@@ -29,18 +29,22 @@ class Sedan:
     def __init__(self):
         self.LENGTH_HALF = 5
         self.DIST_STANDOFF = 0
+        self.IMG = ''
 
 class Compact:
     def __init__(self):
         self.LENGTH_HALF = 5
         self.DIST_STANDOFF = 0
+        self.IMG = ''
 
 class Emergency:
     def __init__(self):
         self.LENGTH_HALF = 5
         self.DIST_STANDOFF = 0
+        self.IMG = ''
 
 class Semi:
     def __init__(self):
         self.LENGTH_HALF = 5
         self.DIST_STANDOFF = 0
+        self.IMG = ''

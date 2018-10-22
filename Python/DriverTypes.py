@@ -26,9 +26,6 @@ Functions:
 
 import numpy as np
 
-def speed_ratio_calculate(mean,stddev):
-        return stddev * (np.random.randn() + mean)
-
 class Passive:
     def __init__(self):
         self.PREFERRED_SPEED_RATIO_MEAN = 0.70
@@ -55,3 +52,7 @@ class Aggressive:
         mean = self.PREFERRED_SPEED_RATIO_MEAN
         stddev = self.PREFERRED_SPEED_RATIO_STDDEV
         self.PREFERRED_SPEED_RATIO = speed_ratio_calculate(mean,stddev)
+
+def speed_ratio_calculate(mean,stddev):
+    ratio = stddev * (np.random.randn() + mean)
+    return ratio
