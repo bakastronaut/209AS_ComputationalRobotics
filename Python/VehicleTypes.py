@@ -20,31 +20,38 @@ Attributes:
         lane changing. Semis and emergency vehicles will need more space than 
         sedans and compacts. This could be a base value that can be scaled or 
         modified to be dependent upon relative velocities.
+    
+    IMG:
+        Path to image for animation/visualization
 
 Methods:
 
 """
 
 class Sedan:
-    def __init__(self):
+    def __init__(self,driver_type):
         self.LENGTH_HALF = 5
         self.DIST_STANDOFF = 0
         self.IMG = ''
+        self.PREFERRED_SPEED_RATIO = driver_type.PREFERRED_SPEED_RATIO
 
 class Compact:
-    def __init__(self):
+    def __init__(self,driver_type):
         self.LENGTH_HALF = 5
         self.DIST_STANDOFF = 0
         self.IMG = ''
+        self.PREFERRED_SPEED_RATIO = driver_type.PREFERRED_SPEED_RATIO
 
 class Emergency:
-    def __init__(self):
+    def __init__(self,driver_type):
         self.LENGTH_HALF = 5
         self.DIST_STANDOFF = 0
         self.IMG = ''
+        self.PREFERRED_SPEED_RATIO = driver_type.PREFERRED_SPEED_RATIO
 
 class Semi:
-    def __init__(self):
+    def __init__(self,driver_type):
         self.LENGTH_HALF = 5
         self.DIST_STANDOFF = 0
         self.IMG = ''
+        self.PREFERRED_SPEED_RATIO = driver_type.PREFERRED_SPEED_RATIO
