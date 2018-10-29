@@ -25,3 +25,4 @@ Reward function:
 R(state) = TBD
 
 --------------Objects--------------
+Each vehicle will have a spatial horizon that defines its radius of visibility. It cannot see anything beyond that radius. This is different from the MDP time horizon.
