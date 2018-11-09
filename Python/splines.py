@@ -8,9 +8,9 @@ Created on Mon Oct 29 02:49:22 2018
 
 import numpy as np
 import matplotlib as mpl
-import scipy as sp
+import scipy.interpolate as interpolate
 
-def fit_spline(xvals,yvals,kind='cubic',demo=False):
+def fit_spline(xvals,yvals,kind='quadratic',demo=False):
     '''
     Receives set of x values and y values, fits a spline and returns the spline
     
@@ -25,12 +25,12 @@ def fit_spline(xvals,yvals,kind='cubic',demo=False):
     '''
     
     # Interpolation to fit the spline
-    f = sp.interpolate.interp1d(xvals,yvals,kind=kind)
+    f = interpolate.interp1d(xvals,yvals,kind=kind)
     
     # If demo is true, show a plot of the cubic function.
     if demo:
         mpl.pyplot.scatter(xvals,yvals)
-        x = np.linspace(np.min(xvals),np.max(xvals),100)
+        x = np.linspace(np.min(xvals),np.max(xvals),10000)
         mpl.pyplot.plot(x,f(x))
         mpl.pyplot.show()
     
