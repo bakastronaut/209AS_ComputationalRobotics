@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib as mpl
 import scipy.interpolate as interpolate
 
-def fit_spline(xvals,yvals,kind='quadratic',demo=False):
+def fit_spline(xvals,yvals,kind='cubic',demo=False):
     '''
     Receives set of x values and y values, fits a spline and returns the spline
     
