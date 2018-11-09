@@ -30,7 +30,7 @@ def fit_spline(xvals,yvals,kind='cubic',demo=False):
     # If demo is true, show a plot of the cubic function.
     if demo:
         mpl.pyplot.scatter(xvals,yvals)
-        x = np.linspace(np.min(xvals),np.max(xvals),10000)
+        x = np.linspace(np.min(xvals),np.max(xvals),100)
         mpl.pyplot.plot(x,f(x))
         mpl.pyplot.show()
     
