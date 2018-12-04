@@ -357,50 +357,7 @@ class Road:
                 color = 'b'
             else:
                 color = 'r'
-            plt.plot(paths[i][0,:],paths[i][1,:],color)
-        
-#    def getD_Theta(self,path,index):
-#        '''
-#        inputs:
-#            path        2x100 array of path coordinates
-#            index       i in [0,99] indicating which path coordinate to evaluate
-#        '''
-#        pathx = path[0,index]
-#        pathy = path[1,index]
-#        [roadx, roady] = self.getProjectionOntoRoad(pathx, pathy)
-#        if(index == 0):
-#            prev_pathx = pathx
-#            prev_pathy = pathy
-#            next_pathx = path[0,index+1]
-#            next_pathy = path[1,index+1]
-#        elif(index == 99):
-#            prev_pathx = path[0,index-1]
-#            prev_pathy = path[1,index-1]
-#            next_pathx = pathx
-#            next_pathy = pathy            
-#        else:
-#            prev_pathx = path[0,index-1]
-#            prev_pathy = path[1,index-1]
-#            next_pathx = path[0,index+1]
-#            next_pathy = path[1,index+1]
-#          
-#        cubic = self.getCubic(roadx)
-#        road_slope = 3*cubic[0]*roadx**2 + 2*cubic[1]*roadx* + cubic[2] 
-#        
-#        road_x_slope = 1
-#        road_y_slope = road_slope        
-#        
-#        def mag(x,y):
-#            return np.sqrt(x**2 + y**2)
-#        
-#        path_x_slope = (next_pathx - prev_pathx)
-#        path_y_slope = (next_pathy - prev_pathy)
-#        
-#        mag_path = mag(path_x_slope, path_y_slope)
-#        mag_road = mag(road_x_slope, road_y_slope)
-#        
-#        return np.arccos((path_x_slope*road_x_slope + path_y_slope*road_y_slope)/(mag_path*mag_road))
-        
+            plt.plot(paths[i][0,:],paths[i][1,:],color)    
         
 
 '''
@@ -415,7 +372,7 @@ w_c = 1-w_s #comfort cost
 
 lane_width = 5
 num_lanes = 2
-MAX_CURVATURE = 2*num_lanes*lane_width
+MAX_CURVATURE = 20
 NUM_CHECKPOINTS = 40
 #create the centerline
 x_vals = np.linspace(-MAX_CURVATURE, MAX_CURVATURE,NUM_CHECKPOINTS)
@@ -565,42 +522,98 @@ plt.subplot(212)
 long_road.draw()
 for i in range(len(best_paths)):
     plt.plot(best_paths[i][0,:],best_paths[i][1,:])
-   
-    
-    
-    
-    
-   
 
-#plt.figure()
-#myRoad.draw()
-#
-#bestPathIndex = list(final_cost).index(min(final_cost))
-#bestPath = paths[bestPathIndex]
-#plt.plot(bestPath[0,:],bestPath[1,:])
-#
-#path_percentage = 10
-#
-#next_x = bestPath[0,path_percentage]
-#next_y = bestPath[1,path_percentage]
-#[s_start,rho_start] = myRoad.getS_RhoCoords(next_x, next_y)
-#s_end = s_end + 5
-#d_rho_start = -1*myRoad.getD_Theta(bestPath,path_percentage)
-#
-#[paths, collisions_raw, collisions_blurred, curvatures] = myRoad.generatePaths(s_start, s_end, rho_start, d_rho_start,num_paths)
-#final_cost = [w_s*collisions_blurred[i]+w_c*curvatures[i] for i in range(len(collisions_blurred))]
-#myRoad.drawPaths(paths, collisions_raw, collisions_blurred, curvatures,final_cost)
-#
-#currPath = paths[0]
-#for i in range(len(currPath[0,:])):
-#    print(myRoad.getD_Theta(currPath, i))
-        
-        
-        
-        
-        
-        
-        
-        
-        
+#%%
+plt.figure()
+R = 50
+NUM_CHECKPOINTS = 2*R
+curved_x_vals = np.linspace(-R,R, NUM_CHECKPOINTS)
+curved_y_vals = [np.sqrt(R**2-x**2) for x in np.linspace(-R,0,NUM_CHECKPOINTS/2)]
+curved_y_vals = curved_y_vals + [-np.sqrt(R**2-x**2)+2*R for x in np.linspace(0,R,NUM_CHECKPOINTS/2)]
+curved_checkpoints = np.vstack((curved_x_vals,curved_y_vals))
+
+
+curvedRoad = Road(curved_checkpoints, lane_width, num_lanes)
+curvedRoad.addObstacle(s=-30, rho=-lane_width/2, r = lane_width/2, cost = 1)
+curvedRoad.addObstacle(s=-10, rho=-lane_width*3/2, r = lane_width/2, cost =1)
+curvedRoad.addObstacle(s=20, rho=-lane_width/2, r = lane_width/2, cost = 1)
+
+plt.subplot(121)
+curvedRoad.draw()
+
+s_start = curved_x_vals[0]
+s_end = s_start + 10
+rho_start = -lane_width/2
+d_rho_start = 0
+num_paths = 30
+
+[paths, collisions_raw, collisions_blurred, curvatures] = curvedRoad.generatePaths(s_start, s_end, rho_start, d_rho_start,num_paths)
+final_cost = [w_s*collisions_blurred[i]+w_c*curvatures[i] for i in range(len(collisions_blurred))]
+curvedRoad.drawPaths(paths, collisions_raw, collisions_blurred, curvatures,final_cost)
+
+bestPathIndex = list(final_cost).index(min(final_cost))
+bestPath = paths[bestPathIndex]
+best_paths = [bestPath]
+
+for k in range(9):
+    [s_start, rho_start] = curvedRoad.getS_RhoCoords(best_paths[k][0,-1],best_paths[k][1,-1])
+    s_end = s_start + 10
+    d_rho_start = 0
+    [paths, collisions_raw, collisions_blurred, curvatures] = curvedRoad.generatePaths(s_start, s_end, rho_start, d_rho_start, num_paths)
+    final_cost = [w_s*collisions_blurred[i] + w_c*curvatures[i] for i in range(len(collisions_blurred))]
+    curvedRoad.drawPaths(paths, collisions_raw, collisions_blurred, curvatures,final_cost)
+    
+    
+    
+    bestPathIndex = list(final_cost).index(min(final_cost))
+    bestPath = paths[bestPathIndex]
+    best_paths.append(bestPath)
+
+plt.subplot(122)
+
+curvedRoad.draw()
+for i in range(len(best_paths)):
+    plt.plot(best_paths[i][0,:],best_paths[i][1,:])
+    
+    
+plt.figure()
+plt.subplot(121)
+curvedRoad.draw()
+
+s_start = curved_x_vals[0]
+s_end = s_start + 20
+rho_start = -lane_width/2
+d_rho_start = 0
+num_paths = 30
+
+[paths, collisions_raw, collisions_blurred, curvatures] = curvedRoad.generatePaths(s_start, s_end, rho_start, d_rho_start,num_paths)
+final_cost = [w_s*collisions_blurred[i]+w_c*curvatures[i] for i in range(len(collisions_blurred))]
+curvedRoad.drawPaths(paths, collisions_raw, collisions_blurred, curvatures,final_cost)
+
+bestPathIndex = list(final_cost).index(min(final_cost))
+bestPath = paths[bestPathIndex]
+best_paths = [bestPath]
+
+for k in range(4):
+    [s_start, rho_start] = curvedRoad.getS_RhoCoords(best_paths[k][0,-1],best_paths[k][1,-1])
+    s_end = s_start + 20
+    d_rho_start = 0
+    [paths, collisions_raw, collisions_blurred, curvatures] = curvedRoad.generatePaths(s_start, s_end, rho_start, d_rho_start, num_paths)
+    final_cost = [w_s*collisions_blurred[i] + w_c*curvatures[i] for i in range(len(collisions_blurred))]
+    curvedRoad.drawPaths(paths, collisions_raw, collisions_blurred, curvatures,final_cost)
+    
+    
+    
+    bestPathIndex = list(final_cost).index(min(final_cost))
+    bestPath = paths[bestPathIndex]
+    best_paths.append(bestPath)
+
+plt.subplot(122)
+curvedRoad = Road(curved_checkpoints, lane_width, num_lanes)
+curvedRoad.addObstacle(s=-30, rho=-lane_width/2, r = lane_width/2, cost = 1)
+curvedRoad.addObstacle(s=-10, rho=-lane_width*3/2, r = lane_width/2, cost =1)
+curvedRoad.addObstacle(s=20, rho=-lane_width/2, r = lane_width/2, cost = 1) 
+curvedRoad.draw()
+for i in range(len(best_paths)):
+    plt.plot(best_paths[i][0,:],best_paths[i][1,:])        
         
