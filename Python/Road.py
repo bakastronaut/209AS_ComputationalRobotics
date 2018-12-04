@@ -68,47 +68,56 @@ class Obstacle:
         
 class Road:
     
-    def __init__(self, checkpoints, width):
-        self.width = width
+    def __init__(self, checkpoints, lane_width, num_lanes):
+        self.lane_width = lane_width
+        self.num_lanes = num_lanes
         self.checkpoints = checkpoints
         [self.f, self.cubics] = fit_spline(self.checkpoints[0,:], self.checkpoints[1,:], kind='cubic', demo=False,returncubics=True)
-        #self.cubic_lengths = [self.getArcLength(self.checkpoints[0,i], self.checkpoints[0,i+1]) for i in range(len(self.cubics)-1)]
-        #self.road_length = sum(self.cubic_lengths)
-        self.obstacles = []
-        
+        self.obstacles = []        
         
     def draw(self):
         #draw center line
         N = len(self.checkpoints[0])*3
         x = np.linspace(np.min(self.checkpoints[0,:]), np.max(self.checkpoints[0,:]),N)
-        plt.plot(x,self.f(x), '--y', linewidth=3)
         
-        #draw left and right boundary of road
-        left_xs = []
-        left_ys = []
-        right_xs = []
-        right_ys = []
-        for i in range(len(x)):
-            [pos_x,pos_y] = self.getCartesianCoords(x[i],self.width)
-            [pos_s,pos_rho] = self.getS_RhoCoords(pos_x,pos_y)
-            [neg_x,neg_y] = self.getCartesianCoords(x[i],-self.width)
-            [neg_s,neg_rho] = self.getS_RhoCoords(neg_x,neg_y)
-            if(pos_y > neg_y):
-                if(np.abs(np.abs(pos_rho) - self.width) < 0.01):
-                    left_xs.append(pos_x)
-                    left_ys.append(pos_y)
-                if(np.abs(np.abs(neg_rho) - self.width) < 0.01):
-                    right_xs.append(neg_x)
-                    right_ys.append(neg_y)
+        #draw the center line in thick, dashed black
+        plt.plot(x,self.f(x), '--k', linewidth=3,label='Road')
+        
+        #draw left and right lane demarcations
+        for k in range(self.num_lanes):
+            left_xs = []
+            left_ys = []
+            right_xs = []
+            right_ys = []
+            curr_width = lane_width*(k+1)
+            for i in range(len(x)):
+                [pos_x,pos_y] = self.getCartesianCoords(x[i],curr_width)
+                [pos_s,pos_rho] = self.getS_RhoCoords(pos_x,pos_y)
+                [neg_x,neg_y] = self.getCartesianCoords(x[i],-curr_width)
+                [neg_s,neg_rho] = self.getS_RhoCoords(neg_x,neg_y)
+                if(pos_y > neg_y): #need to check this to prevent flipping when road slope changes from positive to negative
+                    if(np.abs(np.abs(pos_rho) - curr_width) < 0.01):
+                        left_xs.append(pos_x)
+                        left_ys.append(pos_y)
+                    if(np.abs(np.abs(neg_rho) - curr_width) < 0.01):
+                        right_xs.append(neg_x)
+                        right_ys.append(neg_y)
+                else:
+                    if(np.abs(np.abs(neg_rho) - curr_width) < 0.01):
+                        left_xs.append(neg_x)
+                        left_ys.append(neg_y)
+                    if(np.abs(np.abs(pos_rho) - curr_width) < 0.01):
+                        right_xs.append(pos_x)
+                        right_ys.append(pos_y)
+
+            #draw the terminal edges in thick black
+            if(k == self.num_lanes-1):
+                plt.plot(left_xs,left_ys, 'black', linewidth=3)
+                plt.plot(right_xs,right_ys, 'black', linewidth=3)
+            #draw the dashed lane separaters in thin yellow
             else:
-                if(np.abs(np.abs(neg_rho) - self.width) < 0.01):
-                    left_xs.append(neg_x)
-                    left_ys.append(neg_y)
-                if(np.abs(np.abs(pos_rho) - self.width) < 0.01):
-                    right_xs.append(pos_x)
-                    right_ys.append(pos_y)
-        plt.plot(left_xs,left_ys, 'black', linewidth=3)
-        plt.plot(right_xs,right_ys, 'black', linewidth=3)
+                plt.plot(left_xs,left_ys, '--y', linewidth=1.5)
+                plt.plot(right_xs,right_ys, '--y', linewidth=1.5)
         
         #draw obstacles
         for i in range(len(self.obstacles)):
@@ -143,7 +152,7 @@ class Road:
         min_y = 0
         for i in range(len(self.cubics)):
             a,b,c,d = self.cubics[i][0], self.cubics[i][1], self.cubics[i][2], self.cubics[i][3]
-            x = np.linspace(self.checkpoints[0,i], self.checkpoints[0,i+1],200)
+            x = np.linspace(self.checkpoints[0,i], self.checkpoints[0,i+1],100)
             y = Distance_Function(x,a,b,c,d,Px,Py)
             tempMin = np.min(y)
             if(tempMin < minSoFar):
@@ -225,7 +234,9 @@ class Road:
     
     def getPathCollisionValue(self, path):
         collisions = [0]
-        
+        road_bound = self.lane_width*self.num_lanes
+        lane_markers = [lane_width*i for i in np.arange(-self.num_lanes,self.num_lanes+1,1)]
+        lane_markers.remove(0)
         #check collision with obstacles
         for i in range(len(self.obstacles)):
             c_x = self.obstacles[i].x
@@ -239,15 +250,26 @@ class Road:
                 if(distance <= r):
                     collisions.append(cost)
                     break
-        
-        #check if the car leaves the road
+        #check for crossing lanes and leaving the road
+        rho_prev = self.getS_RhoCoords(path[0,0],path[1,0])[1]
+        lane_crossing_counter = 0
         for i in range(len(path[0,:])):
             x = path[0,i]
             y = path[1,i]
-            [s,rho] = self.getS_RhoCoords(x,y)
-            if(rho > self.width or rho < -self.width):
+            rho_curr = self.getS_RhoCoords(x,y)[1]
+            #if the car leaves the lane
+            if(rho_curr > road_bound or rho_curr < -road_bound):
                 collisions.append(1)
                 break
+            #if the car passes the center line
+            if(np.sign(rho_prev) != np.sign(rho_curr)):
+                lane_crossing_counter += 0.6
+            #check to see if it changes lanes
+            for j in lane_markers:
+                if(np.sign(j-rho_prev) != np.sign(j-rho_curr)):
+                    lane_crossing_counter += 0.2
+            rho_prev = rho_curr
+        collisions.append(lane_crossing_counter)        
         return max(collisions)
     
     def generatePaths(self, s_start, s_end, rho_start, d_rho_start, num_paths):
@@ -256,15 +278,19 @@ class Road:
             paths                       list of num_paths paths. paths are defined as in getPath(...)
             collision_values_raw        list of the actual collision number of a path
             collision_values_blurred    list of numbers, denoting the collision value of each path after gaussian blur
+            curvature_values            list of numbers, denoting the curvature value of each path, normalized.
         '''
         paths = []
         collision_values_raw = []
-        
-        rho_ends = np.linspace(-width,width,num_paths)
+        collision_values_blurred = []
+        curvature_values = []
+        bound = self.lane_width*self.num_lanes
+        rho_ends = np.linspace(-bound,bound,num_paths)
         for i in range(num_paths):
-            path = self.getPath(rho_start, rho_ends[i], s_start, s_end, d_rho_start)
+            path = self.getPath(rho_start, rho_ends[-(i+1)], s_start, s_end, d_rho_start)
             paths.append(path)
             collision_values_raw.append(self.getPathCollisionValue(path))
+            curvature_values.append(self.getCurvature(path))
             
         def gauss(i,k,sig):
             return 1/(np.sqrt(np.pi*2*sig))*np.exp(-((k)**2)/(2*(sig**2)))
@@ -277,69 +303,297 @@ class Road:
                 else:
                     toReturn += g_result*R[k+i]
             return toReturn
-         
-        collision_values_blurred = []
+        
+        #get the blurred collision values
         for i in range(len(collision_values_raw)):
             collision_values_blurred.append(GaussianBlur(collision_values_raw,i,num_paths,1))
-
-        return [paths,collision_values_raw,collision_values_blurred]
+        
+        #normalize the curvature values
+        curvature_values = curvature_values/max(curvature_values)
     
-    def drawPaths(self, paths, collision_values_raw, collision_values_blurred):
-        index = collision_values_blurred.index(min(collision_values_blurred))
+        return [paths,collision_values_raw,collision_values_blurred, curvature_values]
+    
+    def getCurvature(self, path):
+        N = len(path[0,:])
+        K = 0
+        for i in range(N-2):
+            x1 = path[0,i]
+            y1 = path[1,i]
+            x2 = path[0,i+1]
+            y2 = path[1,i+1]
+            x3 = path[0,i+2]
+            y3 = path[1,i+2]
+            x21 = x2-x1
+            y21 = y2-y1
+            x32 = x3-x2
+            y32 = y3-y2
+            
+            mag21 = np.sqrt(x21**2 + y21**2)
+            mag32 = np.sqrt(x32**2 + y32**2)
+            
+            x_diff = x32/mag32 - x21/mag21
+            y_diff = y32/mag32 - y32/mag32
+            
+            K += np.sqrt(x_diff**2 + y_diff**2)
+        return K/(N-2)           
+            
+    def drawPaths(self, paths, collision_values_raw, collision_values_blurred, curvature_values,final_costs):
+        index_safety = collision_values_blurred.index(min(collision_values_blurred))
+        index_curvature = list(curvature_values).index(min(curvature_values))
+        index_final = list(final_costs).index(min(final_costs))
         for i in range(len(paths)):
-            if(i == index):
-                color = 'g'
-            elif(collision_values_raw[i] == 0):
+            if(i == index_final):
+                plt.plot(paths[i][0,:],paths[i][1,:], 'g', linewidth=4)
+                continue
+            elif(i == index_safety):
+                plt.plot(paths[i][0,:],paths[i][1,:],'cyan', linewidth=4)
+                continue
+            elif(i == index_curvature):
+                plt.plot(paths[i][0,:],paths[i][1,:],'magenta', linewidth=4)
+                continue
+            elif(collision_values_raw[i] >= 0.3 and collision_values_raw[i] < 0.7):
+                color = 'y'
+            elif(collision_values_raw[i] < 0.3):
                 color = 'b'
             else:
                 color = 'r'
             plt.plot(paths[i][0,:],paths[i][1,:],color)
+        
+#    def getD_Theta(self,path,index):
+#        '''
+#        inputs:
+#            path        2x100 array of path coordinates
+#            index       i in [0,99] indicating which path coordinate to evaluate
+#        '''
+#        pathx = path[0,index]
+#        pathy = path[1,index]
+#        [roadx, roady] = self.getProjectionOntoRoad(pathx, pathy)
+#        if(index == 0):
+#            prev_pathx = pathx
+#            prev_pathy = pathy
+#            next_pathx = path[0,index+1]
+#            next_pathy = path[1,index+1]
+#        elif(index == 99):
+#            prev_pathx = path[0,index-1]
+#            prev_pathy = path[1,index-1]
+#            next_pathx = pathx
+#            next_pathy = pathy            
+#        else:
+#            prev_pathx = path[0,index-1]
+#            prev_pathy = path[1,index-1]
+#            next_pathx = path[0,index+1]
+#            next_pathy = path[1,index+1]
+#          
+#        cubic = self.getCubic(roadx)
+#        road_slope = 3*cubic[0]*roadx**2 + 2*cubic[1]*roadx* + cubic[2] 
+#        
+#        road_x_slope = 1
+#        road_y_slope = road_slope        
+#        
+#        def mag(x,y):
+#            return np.sqrt(x**2 + y**2)
+#        
+#        path_x_slope = (next_pathx - prev_pathx)
+#        path_y_slope = (next_pathy - prev_pathy)
+#        
+#        mag_path = mag(path_x_slope, path_y_slope)
+#        mag_road = mag(road_x_slope, road_y_slope)
+#        
+#        return np.arccos((path_x_slope*road_x_slope + path_y_slope*road_y_slope)/(mag_path*mag_road))
+        
+        
 
 '''
 MAIN
 '''
  
-plt.close('all')   
-#create the centerline
-x_vals = np.linspace(-10,10,40)
-y_vals = [np.sqrt(100-x**2) for x in np.linspace(-10,0,20)]
-y_vals = y_vals + [-np.sqrt(100-x**2)+20 for x in np.linspace(0,10,20)]
-myCheckpoints = np.vstack((x_vals,y_vals))
+plt.close('all') 
 
+#define cost weights
+w_s = 0.5 #safety cost
+w_c = 1-w_s #comfort cost
+
+lane_width = 5
+num_lanes = 2
+MAX_CURVATURE = 2*num_lanes*lane_width
+NUM_CHECKPOINTS = 40
+#create the centerline
+x_vals = np.linspace(-MAX_CURVATURE, MAX_CURVATURE,NUM_CHECKPOINTS)
+
+'''
+S_Bend road generation
+'''
+y_vals = [np.sqrt(MAX_CURVATURE**2-x**2) for x in np.linspace(-MAX_CURVATURE,0,NUM_CHECKPOINTS/2)]
+y_vals = y_vals + [-np.sqrt(MAX_CURVATURE**2-x**2)+2*MAX_CURVATURE for x in np.linspace(0,MAX_CURVATURE,NUM_CHECKPOINTS/2)]
+
+'''
+Straight road generation
+'''
+#y_vals = [5 for i in range(len(x_vals))]
+#y_vals = x_vals
+
+myCheckpoints = np.vstack((x_vals,y_vals))
 #create the road
-width = 5
-myRoad = Road(myCheckpoints,width)
+myRoad = Road(myCheckpoints,lane_width, num_lanes)
 
 #add an obstacle onto the road
-myRoad.addObstacle(s=7,rho=1,r=3,cost=0.3)
-myRoad.addObstacle(s=4,rho=0,r=1,cost=1)
+#myRoad.addObstacle(s=7,rho=3,r=3,cost=0.5)
+#myRoad.addObstacle(s=-5,rho=lane_width/2,r=lane_width/4,cost=1)
 
 myRoad.draw()
 
 #generate path parameters 
-s_start = -9.6
-s_end = 8
-rho_start = 0
-d_rho_start = 0
-num_paths = 10
+s_start = x_vals[0]
+s_end = 0
+rho_start = lane_width/2
+d_rho_start = np.pi/4
+num_paths = 30
 
-[paths, collisions_raw, collisions_blurred] = myRoad.generatePaths(s_start, s_end, rho_start, d_rho_start,num_paths)
-myRoad.drawPaths(paths, collisions_raw, collisions_blurred)
+#generate and draw prospective paths
+[paths, collisions_raw, collisions_blurred, curvatures] = myRoad.generatePaths(s_start, s_end, rho_start, d_rho_start,num_paths)
+final_cost = [w_s*collisions_blurred[i]+w_c*curvatures[i] for i in range(len(collisions_blurred))]
+myRoad.drawPaths(paths, collisions_raw, collisions_blurred, curvatures,final_cost)
+
+#P_x = -15
+#P_y = 20
+#[proj_x,proj_y] = myRoad.getProjectionOntoRoad(P_x,P_y)
+#[s,rho] = myRoad.getS_RhoCoords(P_x,P_y)
+#[final_x,final_y] = myRoad.getCartesianCoords(s,rho)
+
+#plt.scatter(P_x,P_y,s=100,label='original (x,y) point')
+#plt.scatter(proj_x,proj_y,s=100,label='projected (x,y) point')
+#plt.scatter(final_x, final_y,marker='x',color='r',label='remapped (s,rho) point')
+#plt.legend()
+
+final_cost = [w_s*collisions_blurred[i]+w_c*curvatures[i] for i in range(len(collisions_blurred))]
+
 
 plt.figure()
-plt.plot(collisions_raw)
-plt.plot(collisions_blurred)
+plt.plot(final_cost,'g')
+plt.plot(collisions_raw,'r')
+plt.plot(collisions_blurred,'cyan')
+plt.plot(curvatures,'magenta')
 
+
+plt.figure()
+NUM_CHECKPOINTS_LONG = 20
+S_START = 0
+S_END = lane_width*20
+long_x_vals = np.linspace(S_START, S_END, NUM_CHECKPOINTS_LONG)
+long_y_vals = [0 for i in long_x_vals]
+long_checkpoints = np.vstack((long_x_vals, long_y_vals))
+
+long_road = Road(long_checkpoints, lane_width, num_lanes)
+
+long_road.addObstacle(s=20, rho=-lane_width/2, r = lane_width/2, cost = 1)
+long_road.addObstacle(s=40, rho=-lane_width*3/2, r = lane_width/2, cost =1)
+long_road.addObstacle(s=70, rho=-lane_width/2, r = lane_width/2, cost = 1)
+
+plt.subplot(211)
+long_road.draw()
+
+s_start = long_x_vals[0]
+s_end = 10 
+rho_start = -lane_width/2
+d_rho_start = 0
+num_paths = 30
+
+[paths, collisions_raw, collisions_blurred, curvatures] = long_road.generatePaths(s_start, s_end, rho_start, d_rho_start,num_paths)
+final_cost = [w_s*collisions_blurred[i]+w_c*curvatures[i] for i in range(len(collisions_blurred))]
+long_road.drawPaths(paths, collisions_raw, collisions_blurred, curvatures,final_cost)
+
+bestPathIndex = list(final_cost).index(min(final_cost))
+bestPath = paths[bestPathIndex]
+best_paths = [bestPath]
+
+for k in range(9):
+    [s_start, rho_start] = long_road.getS_RhoCoords(best_paths[k][0,-1],best_paths[k][1,-1])
+    s_end = s_start + 10
+    d_rho_start = 0
+    [paths, collisions_raw, collisions_blurred, curvatures] = long_road.generatePaths(s_start, s_end, rho_start, d_rho_start, num_paths)
+    final_cost = [w_s*collisions_blurred[i] + w_c*curvatures[i] for i in range(len(collisions_blurred))]
+    long_road.drawPaths(paths, collisions_raw, collisions_blurred, curvatures,final_cost)
+    
+    
+    
+    bestPathIndex = list(final_cost).index(min(final_cost))
+    bestPath = paths[bestPathIndex]
+    best_paths.append(bestPath)
+
+plt.subplot(212)
+
+long_road.draw()
+for i in range(len(best_paths)):
+    plt.plot(best_paths[i][0,:],best_paths[i][1,:])
    
-        
-        
-        
-        
-        
-        
-        
-        
-        
+    
+    
+plt.figure()
+plt.subplot(211)
+long_road.draw()
+
+s_start = long_x_vals[0]
+s_end = 20
+rho_start = -lane_width/2
+d_rho_start = 0
+num_paths = 30
+
+[paths, collisions_raw, collisions_blurred, curvatures] = long_road.generatePaths(s_start, s_end, rho_start, d_rho_start,num_paths)
+final_cost = [w_s*collisions_blurred[i]+w_c*curvatures[i] for i in range(len(collisions_blurred))]
+long_road.drawPaths(paths, collisions_raw, collisions_blurred, curvatures,final_cost)
+
+bestPathIndex = list(final_cost).index(min(final_cost))
+bestPath = paths[bestPathIndex]
+best_paths = [bestPath]
+
+for k in range(4):
+    [s_start, rho_start] = long_road.getS_RhoCoords(best_paths[k][0,-1],best_paths[k][1,-1])
+    s_end = s_start + 20
+    d_rho_start = 0
+    [paths, collisions_raw, collisions_blurred, curvatures] = long_road.generatePaths(s_start, s_end, rho_start, d_rho_start, num_paths)
+    final_cost = [w_s*collisions_blurred[i] + w_c*curvatures[i] for i in range(len(collisions_blurred))]
+    long_road.drawPaths(paths, collisions_raw, collisions_blurred, curvatures,final_cost)
+    
+    
+    
+    bestPathIndex = list(final_cost).index(min(final_cost))
+    bestPath = paths[bestPathIndex]
+    best_paths.append(bestPath)
+
+plt.subplot(212)
+
+long_road.draw()
+for i in range(len(best_paths)):
+    plt.plot(best_paths[i][0,:],best_paths[i][1,:])
+   
+    
+    
+    
+    
+   
+
+#plt.figure()
+#myRoad.draw()
+#
+#bestPathIndex = list(final_cost).index(min(final_cost))
+#bestPath = paths[bestPathIndex]
+#plt.plot(bestPath[0,:],bestPath[1,:])
+#
+#path_percentage = 10
+#
+#next_x = bestPath[0,path_percentage]
+#next_y = bestPath[1,path_percentage]
+#[s_start,rho_start] = myRoad.getS_RhoCoords(next_x, next_y)
+#s_end = s_end + 5
+#d_rho_start = -1*myRoad.getD_Theta(bestPath,path_percentage)
+#
+#[paths, collisions_raw, collisions_blurred, curvatures] = myRoad.generatePaths(s_start, s_end, rho_start, d_rho_start,num_paths)
+#final_cost = [w_s*collisions_blurred[i]+w_c*curvatures[i] for i in range(len(collisions_blurred))]
+#myRoad.drawPaths(paths, collisions_raw, collisions_blurred, curvatures,final_cost)
+#
+#currPath = paths[0]
+#for i in range(len(currPath[0,:])):
+#    print(myRoad.getD_Theta(currPath, i))
         
         
         
